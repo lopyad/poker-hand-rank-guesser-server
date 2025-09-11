@@ -9,9 +9,7 @@ export type User = {
 };
 
 export class Repository {
-  getHandRank(hand: string[]): string {
-    return "High Card";
-  }
+  
 
   whoAmI() {
     console.log("Here is Repository");
