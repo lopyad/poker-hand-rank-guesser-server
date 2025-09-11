@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { Controller } from './controller';
 import { ApiResponse } from '../types';
+import { verifyToken } from '../middleware/authMiddleware'; // verifyToken 임포트
 
 export function createAuthRouter(controller: Controller): Router {
   const router = Router();
@@ -12,31 +13,42 @@ export function createAuthRouter(controller: Controller): Router {
       return res.status(400).json({ success: false, message: 'idToken is required in the request body.' } as ApiResponse<any>);
     }
     
-    const result = await controller.handleGoogleLogin(idToken);
+    const [appToken, error] = await controller.handleGoogleLogin(idToken);
+    const flag = appToken !== null ? true : false;
+    const result = { success: flag, message: "login success", data: appToken};
 
     if (!result.success) {
-      return res.status(400).json(result as ApiResponse<any>);
+      return res.status(400).json(result as ApiResponse<string>);
     }
 
-    return res.status(200).json(result as ApiResponse<any>);
+    return res.status(200).json(result as ApiResponse<string>);
   });
 
-  // GET /users/me 라우트 추가
-  router.get('/users/me', async (req: Request, res: Response) => {
-    // 1. 여기에 JWT를 검증하는 미들웨어 또는 코드가 들어갈 부분입니다.
-    //    (예: req.headers.authorization에서 토큰 추출 및 검증)
-    console.log("[AuthRouter] GET /users/me request received.");
-    console.log("[AuthRouter] JWT verification would happen here.");
+  // GET /users/me 라우트에 verifyToken 미들웨어 적용
+  router.get('/users/me', verifyToken, async (req: Request, res: Response) => {
+    // verifyToken 미들웨어가 실행된 후에는 req.user에 디코딩된 토큰 정보가 있습니다.
+    if (!req.user || !req.user.userId) {
+      // 이 경우는 verifyToken 미들웨어에서 이미 처리되었어야 하지만, 타입 안전성을 위해 한 번 더 확인
+      return res.status(401).json({ success: false, message: 'User not authenticated or user ID missing.' } as ApiResponse<any>);
+    }
 
-    // 2. 검증된 JWT에서 사용자 ID를 추출하고, 해당 ID로 사용자 이름을 조회하는 코드가 들어갈 부분입니다.
-    //    (예: const userId = req.user.id; const userName = await controller.getUserName(userId);)
-    console.log("[AuthRouter] User name lookup would happen here.");
+    const userId = req.user.userId;
+    console.log(`[AuthRouter] GET /users/me request received for userId: ${userId}`);
 
-    // 일단 성공 응답을 반환합니다.
+    const [user, error] = await controller.getUserProfile(userId);
+
+    if (error) {
+      return res.status(500).json({ success: false, message: error.message } as ApiResponse<any>);
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' } as ApiResponse<any>);
+    }
+
     return res.status(200).json({ 
       success: true, 
-      message: "User info retrieved successfully (mocked).", 
-      data: { name: "Mock User" } } as ApiResponse<{ name: string }>);
+      message: "User info retrieved successfully.", 
+      data: user } as ApiResponse<typeof user>);
   });
 
   return router;

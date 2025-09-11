@@ -1,5 +1,5 @@
-import { Repository, User } from "../repository/repository";
-import { Failable } from "../types";
+import { Repository } from "../repository/repository";
+import { Failable, User } from "../types";
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
@@ -27,7 +27,7 @@ if (!JWT_SECRET) {
 export class AuthService {
   constructor(private readonly repository: Repository) {}
 
-  async processGoogleLogin(idToken: string): Promise<Failable<{ appToken: string }>> {
+  async processGoogleLogin(idToken: string): Promise<Failable<string>> {
     try {
       console.log("[AuthService] Verifying Google ID token...");
       
@@ -86,7 +86,7 @@ export class AuthService {
         { expiresIn: '1h' }  // 옵션: 토큰 만료 시간 (예: 1시간)
       );
 
-      return [{ appToken }, null];
+      return [appToken, null];
 
     } catch (error: any) {
       console.error("[AuthService] Google ID token verification failed:", error.message);

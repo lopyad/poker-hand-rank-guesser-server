@@ -33,3 +33,13 @@ declare global {
     }
   }
 }
+
+// User type definition
+import { ObjectId } from 'mongodb'; // Import ObjectId for User type
+export type User = {
+  _id?: ObjectId; // MongoDB's _id 필드
+  id: string; // Our internal ID (e.g., Google ID)
+  email: string;
+  name: string;
+  googleId: string;
+};
