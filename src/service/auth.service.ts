@@ -1,6 +1,7 @@
 import { Repository, User } from "../repository/repository";
 import { Failable } from "../types";
 import { OAuth2Client } from 'google-auth-library';
+import jwt from 'jsonwebtoken';
 
 // GOOGLE_CLIENT_ID는 .env 파일에서 불러옵니다.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -14,6 +15,14 @@ if (!GOOGLE_CLIENT_ID) {
 }
 
 const client = new OAuth2Client(GOOGLE_CLIENT_ID!);
+
+// JWT_SECRET은 .env 파일에서 불러옵니다.
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error('환경 변수 JWT_SECRET이 설정되지 않았습니다. 보안을 위해 강력한 비밀 키를 .env 파일에 추가해주세요.');
+  // 실제 프로덕션 환경에서는 애플리케이션을 종료하거나 적절한 에러 처리를 해야 합니다.
+}
 
 export class AuthService {
   constructor(private readonly repository: Repository) {}
@@ -69,9 +78,13 @@ export class AuthService {
           return [null, new Error('Failed to get user.')];
       }
 
-      // 3. 여기에 우리 서비스의 자체 JWT 토큰을 생성하는 로직이 위치합니다.
+      // 3. 우리 서비스의 자체 JWT 토큰을 생성하는 로직이 위치합니다.
       console.log("[AuthService] Generating internal JWT...");
-      const appToken = "internal-jwt-token-for-" + user.id; // 이 부분도 실제 JWT 생성으로 대체될 예정
+      const appToken = jwt.sign(
+        { userId: user.id }, // Payload: 사용자 ID를 포함
+        JWT_SECRET!,         // Secret Key: .env에서 불러온 비밀 키 사용
+        { expiresIn: '1h' }  // 옵션: 토큰 만료 시간 (예: 1시간)
+      );
 
       return [{ appToken }, null];
 
