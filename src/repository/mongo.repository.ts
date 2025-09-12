@@ -34,7 +34,7 @@ export class MongoUserRepository {
       if (user) {
         return [user, null];
       } else {
-        return [null, null]; // 유저를 찾지 못함
+        return [null, new Error("fail to find user")]; // 유저를 찾지 못함
       }
     } catch (e: any) {
       console.error("[MongoUserRepository] Error finding user by Google ID:", e);
@@ -74,7 +74,7 @@ export class MongoUserRepository {
       if (user) {
         return [user, null];
       } else {
-        return [null, null];
+        return [null, new Error("fail to find user")];
       }
     } catch (e: any) {
       console.error("[MongoUserRepository] Error getting user by ID:", e);
@@ -112,7 +112,7 @@ export class MongoUserRepository {
       if (result.deletedCount === 1) {
         return [true, null];
       } else {
-        return [false, new Error("User not found or not deleted.")];
+        return [null, new Error("User not found or not deleted.")];
       }
     } catch (e: any) {
       console.error("[MongoUserRepository] Error deleting user:", e);

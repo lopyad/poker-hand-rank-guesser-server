@@ -8,20 +8,15 @@ export function createAuthRouter(controller: Controller): Router {
 
   router.post('/google/login', async (req: Request, res: Response) => {
     const { idToken } = req.body;
-
     if (!idToken || typeof idToken !== 'string') {
       return res.status(400).json({ success: false, message: 'idToken is required in the request body.' } as ApiResponse<any>);
     }
     
     const [appToken, error] = await controller.handleGoogleLogin(idToken);
-    const flag = appToken !== null ? true : false;
-    const result = { success: flag, message: "login success", data: appToken};
-
-    if (!result.success) {
-      return res.status(400).json(result as ApiResponse<string>);
+    if(error){
+      return res.status(400).json({ success: false, message: `${error.message}`});
     }
-
-    return res.status(200).json(result as ApiResponse<string>);
+    return res.status(200).json({ success: true, message: "login success", data: appToken});
   });
 
   // GET /users/me 라우트에 verifyToken 미들웨어 적용
@@ -36,19 +31,18 @@ export function createAuthRouter(controller: Controller): Router {
     console.log(`[AuthRouter] GET /users/me request received for userId: ${userId}`);
 
     const [user, error] = await controller.getUserProfile(userId);
-
     if (error) {
       return res.status(500).json({ success: false, message: error.message } as ApiResponse<any>);
     }
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found.' } as ApiResponse<any>);
-    }
+    // if (!user) {
+    //   return res.status(404).json({ success: false, message: 'User not found.' } as ApiResponse<any>);
+    // }
 
     return res.status(200).json({ 
       success: true, 
       message: "User info retrieved successfully.", 
-      data: user } as ApiResponse<typeof user>);
+      data: user });
   });
 
   return router;
