@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Controller } from './controller';
+import { Controller } from '../controller/controller';
 import { ApiResponse } from '../types';
 import { verifyToken } from '../middleware/authMiddleware'; // verifyToken 임포트
 
