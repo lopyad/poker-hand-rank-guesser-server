@@ -37,6 +37,8 @@ declare global {
 
 // User type definition
 import { ObjectId } from 'mongodb'; // Import ObjectId for User type
+import { WebSocket } from 'ws'; // New import for GameRoom
+
 export type User = {
   _id?: ObjectId; // MongoDB's _id 필드
   id: string; // Our internal ID (e.g., Google ID)
@@ -44,3 +46,11 @@ export type User = {
   name: string;
   googleId: string;
 };
+
+export interface GameRoom {
+  roomCode: string;
+  players: Map<string, WebSocket>; // Map of playerId to WebSocket
+  whitelistedPlayers: Set<string>; // Players authorized to join
+  maxPlayers: number; // Maximum number of players allowed
+  // Add other game-specific state here
+}

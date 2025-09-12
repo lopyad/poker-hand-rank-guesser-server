@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { Controller } from "./controller/controller";
-import { createAuthRouter } from './controller/auth.router';
+import { createAuthRouter } from './router/auth.router';
+import { createGameRouter } from './router/game.router';
+import { createWebSocketServer } from './websocket/websocket'; // New import
 
 export function startServer(controller: Controller) {
   const app = express();
@@ -21,7 +23,14 @@ export function startServer(controller: Controller) {
   const authRouter = createAuthRouter(controller);
   app.use('/auth', authRouter);
 
-  app.listen(port, () => {
+  // 게임 관련 라우트를 미들웨어로 등록합니다.
+  const gameRouter = createGameRouter(controller);
+  app.use('/game', gameRouter);
+
+  const httpServer = app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
   });
+
+  // 생성된 HTTP 서버를 웹소켓 서버에 전달합니다.
+  createWebSocketServer(httpServer, controller);
 }
