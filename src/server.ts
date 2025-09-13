@@ -19,13 +19,8 @@ export function startServer(controller: Controller) {
 
   app.use(express.json());
 
-  // 인증 관련 라우트를 미들웨어로 등록합니다.
-  const authRouter = createAuthRouter(controller);
-  app.use('/auth', authRouter);
-
-  // 게임 관련 라우트를 미들웨어로 등록합니다.
-  const gameRouter = createGameRouter(controller);
-  app.use('/game', gameRouter);
+  app.use('/auth', createAuthRouter(controller));
+  app.use('/game', createGameRouter(controller));
 
   const httpServer = app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);

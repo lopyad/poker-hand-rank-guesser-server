@@ -45,8 +45,7 @@ export class Controller {
     return this.gameService.createRoomForPlayer(playerId);
   }
 
-  public checkRoomJoinPossibility(roomCode: string, playerId: string): boolean {
-    console.log(`[Controller] Delegating join possibility check for room ${roomCode} by player ${playerId} to GameService.`);
+  public checkRoomJoinAndWhitelistPlayer(roomCode: string, playerId: string): Failable<boolean> {
     return this.gameService.checkAndWhitelistPlayer(roomCode, playerId);
   }
 

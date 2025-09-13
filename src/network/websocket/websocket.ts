@@ -29,7 +29,6 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
   wss.on('connection', (ws: CustomWebSocket, req: IncomingMessage) => {
     console.log('A new client connected');
 
-    // 1. URL 쿼리 매개변수에서 토큰 추출
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
     const token = url.searchParams.get('token');
 
@@ -40,13 +39,12 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
     }
 
     try {
-      if(token){
-      // 2. verifyJwt 함수를 사용하여 토큰 검증
-      const decoded = verifyJwt(token);
-      ws.userId = decoded.userId; // Attach authenticated userId to WebSocket object
-      console.log(`Client ${ws.userId} authenticated.`);
+        if(token){
+        const decoded = verifyJwt(token);
+        ws.userId = decoded.userId; // Attach authenticated userId to WebSocket object
+        console.log(`Client ${ws.userId} authenticated.`);
 
-      ws.send(JSON.stringify({ success: true, message: `Welcome, ${ws.userId}!` }));
+        ws.send(JSON.stringify({ success: true, message: `Welcome, ${ws.userId}!` }));
       }
     } catch (error) {
       console.error('JWT verification failed:', error);
@@ -61,7 +59,6 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
       return;
     }
 
-    // 클라이언트로부터 메시지를 받았을 때의 처리
     ws.on('message', (message: string) => {
       console.log('Received message =>', message.toString());
       try {

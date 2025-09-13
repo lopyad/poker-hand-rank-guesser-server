@@ -29,17 +29,24 @@ export class GameService {
     return this.gameManager.getRoom(roomCode);
   }
 
-  public addPlayerToRoomWhitelist(roomCode: string, playerId: string): boolean {
+  public addPlayerToRoomWhitelist(roomCode: string, playerId: string): Failable<boolean> {
     return this.gameManager.addPlayerToWhitelist(roomCode, playerId);
   }
 
-  public checkAndWhitelistPlayer(roomCode: string, playerId: string): boolean {
+  public checkAndWhitelistPlayer(roomCode: string, playerId: string): Failable<boolean> {
     const room = this.gameManager.getRoom(roomCode);
     if (!room) {
       console.log(`[GameService] Room ${roomCode} not found for checkAndWhitelistPlayer.`);
-      return false;
+      return [null, new Error("fail to find room by roomCode")];
     }
-    return this.gameManager.addPlayerToWhitelist(roomCode, playerId);
+    
+    const [_, error] = this.gameManager.addPlayerToWhitelist(roomCode, playerId);
+    if(error){
+      return [null, error];
+    }
+
+    return [true, null];
+    
   }
 
   public joinRoom(roomCode: string, playerId: string, ws: WebSocket): boolean {
@@ -73,20 +80,20 @@ class GameManager { // Removed export
     return roomCode;
   }
 
-  public addPlayerToWhitelist(roomCode: string, playerId: string): boolean {
+  public addPlayerToWhitelist(roomCode: string, playerId: string): Failable<boolean> {
     const room = this.rooms.get(roomCode);
     if (room) {
       if (room.whitelistedPlayers.size < room.maxPlayers) {
         room.whitelistedPlayers.add(playerId);
         console.log(`Player ${playerId} added to whitelist for room ${roomCode}.`);
-        return true;
+        return [true, null];
       } else {
         console.log(`Room ${roomCode} is full. Cannot add player ${playerId} to whitelist.`);
-        return false;
+        return [null, new Error("Room ${roomCode} is full.")];
       }
     }
     console.log(`Room ${roomCode} not found. Cannot add player ${playerId} to whitelist.`);
-    return false;
+    return [null, new Error("Room ${roomCode} not found.")];
   }
 
   public joinRoom(roomCode: string, playerId: string, ws: WebSocket): boolean {

@@ -6,56 +6,41 @@ import { verifyToken } from '../../middleware/authMiddleware';
 export function createGameRouter(controller: Controller): Router {
   const router = Router();
 
-  router.get('/', (req: Request, res: Response) => {
-    res.status(200).json({ message: 'Game router is working!' });
-  });
-
-  router.get('/multi', (req: Request, res: Response) => {
-    res.status(200).json({ message: 'Multiplayer game endpoint!' });
-  });
-
   router.get('/multi/room', verifyToken, (req: Request, res: Response) => {
+    // verifyToken 미들웨어가 실행된 후에는 req.user에 디코딩된 토큰 정보가 있습니다.
     if (!req.user || !req.user.userId) {
-      // 이 경우는 verifyToken 미들웨어에서 이미 처리되었어야 하지만, 타입 안전성을 위해 한 번 더 확인
       return res.status(401).json({ success: false, message: 'User not authenticated or user ID missing.' } as ApiResponse<any>);
     }
-    const playerId = req.user.userId as string; // Assuming playerId is passed as a query parameter
-    if (!playerId) {
-      return res.status(400).json({ 
-        sucess: false,
-        message: 'Player ID is required.' });
-    }
-    const roomCode = controller.createGameRoom(playerId);
 
-    const response: ApiResponse<string> = {
+    const userId = req.user.userId as string;
+    const roomCode = controller.createGameRoom(userId);
+
+    res.status(200).json({
         success: true,
         message: "success to create room code",
         data: roomCode
-    }
-    res.status(200).json(response);
+    });
   });
 
   router.put('/multi/room', verifyToken, (req: Request, res: Response) => {
-    const playerId = req.user?.userId;
-    const { roomCode } = req.body;
-
-    if (!roomCode || !playerId) {
-      const response: ApiResponse<null> = {
-        success: false,
-        message: 'Room code and player ID are required.',
-        data: null,
-      };
-      return res.status(400).json(response);
+    // verifyToken 미들웨어가 실행된 후에는 req.user에 디코딩된 토큰 정보가 있습니다.
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated or user ID missing.' } as ApiResponse<any>);
     }
 
-    const isPossible = controller.checkRoomJoinPossibility(roomCode, playerId);
+    const userId = req.user.userId;
+    const { roomCode } = req.body;
 
-    const response: ApiResponse<null> = {
-      success: isPossible,
-      message: isPossible ? 'Player successfully whitelisted for room.' : 'Failed to whitelist player: Room not found or full.',
-      data: null,
-    };
-    res.status(isPossible ? 200 : 400).json(response);
+    if (!roomCode) {
+      return res.status(400).json({ success: false, message: 'roomCode is required.' });
+    }
+
+    const [_, error] = controller.checkRoomJoinAndWhitelistPlayer(roomCode, userId);
+    if(error){
+      return res.status(400).json({ sucess: false, message: error.message});
+    }
+
+    res.status(200).json({ sucess: true, message: "Player successfully whitelisted for room."});
   });
 
   return router;
