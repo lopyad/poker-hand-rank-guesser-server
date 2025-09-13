@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { Controller } from '../controller/controller';
-import { ApiResponse } from '../types'; // Import ApiResponse
-import { verifyToken } from '../middleware/authMiddleware';
+import { Controller } from '../../controller/controller';
+import { ApiResponse } from '../../types'; // Import ApiResponse
+import { verifyToken } from '../../middleware/authMiddleware';
 
 export function createGameRouter(controller: Controller): Router {
   const router = Router();
@@ -36,7 +36,8 @@ export function createGameRouter(controller: Controller): Router {
   });
 
   router.put('/multi/room', verifyToken, (req: Request, res: Response) => {
-    const { roomCode, playerId } = req.body; // Expect roomCode and playerId in request body
+    const playerId = req.user?.userId;
+    const { roomCode } = req.body;
 
     if (!roomCode || !playerId) {
       const response: ApiResponse<null> = {

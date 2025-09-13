@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { Controller } from '../controller/controller';
-import { ApiResponse } from '../types';
-import { verifyToken } from '../middleware/authMiddleware'; // verifyToken 임포트
+import { Controller } from '../../controller/controller';
+import { ApiResponse } from '../../types';
+import { verifyToken } from '../../middleware/authMiddleware'; // verifyToken 임포트
 
 export function createAuthRouter(controller: Controller): Router {
   const router = Router();

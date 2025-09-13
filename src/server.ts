@@ -1,9 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { Controller } from "./controller/controller";
-import { createAuthRouter } from './router/auth.router';
-import { createGameRouter } from './router/game.router';
-import { createWebSocketServer } from './websocket/websocket'; // New import
+import { createAuthRouter } from './network/router/auth.router';
+import { createGameRouter } from './network/router/game.router';
+import { createWebSocketServer } from './network/websocket/websocket'; // New import
 
 export function startServer(controller: Controller) {
   const app = express();

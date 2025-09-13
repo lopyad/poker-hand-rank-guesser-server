@@ -59,9 +59,9 @@ export class AuthService {
       // 2. 검증된 유저 정보를 데이터베이스에서 조회하거나 새로 저장합니다.
       let user: User | null;
       const [foundUser, findErr] = await this.repository.findUserByGoogleId(googleUserInfo.googleId);
-      if (findErr) {
-        return [null, findErr]; // DB 조회 에러 발생
-      }
+      // if (findErr) {
+      //   return [null, findErr]; // DB 조회 에러 발생
+      // }
 
       if (foundUser) {
         user = foundUser;

@@ -1,11 +1,15 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
-import { Controller } from '../controller/controller'; // Import Controller
+import { Controller } from '../../controller/controller'; // Import Controller
+import { IncomingMessage } from 'http'; // Import IncomingMessage
+import { verifyJwt } from '../../middleware/authMiddleware'; // Import verifyJwt
+import jwt from 'jsonwebtoken'; // Import jwt for error types
 
-// Extend WebSocket to store roomCode and playerId
+// Extend WebSocket to store roomCode, playerId, and userId
 interface CustomWebSocket extends WebSocket {
   roomCode?: string;
   playerId?: string;
+  userId?: string; // Add userId
 }
 
 export function createWebSocketServer(httpServer: Server, controller: Controller) {
@@ -22,8 +26,40 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
     });
   };
 
-  wss.on('connection', (ws: CustomWebSocket) => {
+  wss.on('connection', (ws: CustomWebSocket, req: IncomingMessage) => {
     console.log('A new client connected');
+
+    // 1. URL 쿼리 매개변수에서 토큰 추출
+    const url = new URL(req.url || '/', `http://${req.headers.host}`);
+    const token = url.searchParams.get('token');
+
+    if (!token) {
+      ws.send(JSON.stringify({ success: false, message: 'Authentication token missing in URL query parameter.' }));
+      ws.close(1008, 'Unauthorized');
+      return;
+    }
+
+    try {
+      if(token){
+      // 2. verifyJwt 함수를 사용하여 토큰 검증
+      const decoded = verifyJwt(token);
+      ws.userId = decoded.userId; // Attach authenticated userId to WebSocket object
+      console.log(`Client ${ws.userId} authenticated.`);
+
+      ws.send(JSON.stringify({ success: true, message: `Welcome, ${ws.userId}!` }));
+      }
+    } catch (error) {
+      console.error('JWT verification failed:', error);
+      let errorMessage = 'Authentication failed.';
+      if (error instanceof jwt.TokenExpiredError) {
+        errorMessage = 'Authentication failed: Token expired.';
+      } else if (error instanceof jwt.JsonWebTokenError) {
+        errorMessage = 'Authentication failed: Invalid token.';
+      }
+      ws.send(JSON.stringify({ success: false, message: errorMessage }));
+      ws.close(1008, 'Unauthorized');
+      return;
+    }
 
     // 클라이언트로부터 메시지를 받았을 때의 처리
     ws.on('message', (message: string) => {
@@ -32,7 +68,8 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
         const parsedMessage = JSON.parse(message.toString());
 
         if (parsedMessage.type === 'joinRoom') {
-          const { roomCode, playerId } = parsedMessage;
+          const { roomCode } = parsedMessage;
+          const playerId = ws.userId;
           if (!roomCode || !playerId) {
             ws.send(JSON.stringify({ success: false, message: 'roomCode and playerId are required for joinRoom.' }));
             return;
