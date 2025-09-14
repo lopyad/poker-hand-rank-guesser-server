@@ -1,7 +1,7 @@
 import { AuthService } from "../service/auth.service";
 import { Service } from "../service/service";
 import { GameService } from "../service/game.service"; // Changed import
-import { CustomWebSocket, FuncResponse, GameRoom, WebSocketRequest, WebSocketResponse } from "../types"; // Import GameRoom
+import { CustomWebSocket, FuncResponse, GameRoom, C2S_Message, S2C_Message } from "../types"; // Import GameRoom
 import { WebSocket } from 'ws'; // Import WebSocket
 
 import { ApiResponse, User } from "../types"; // Import Failable and User
@@ -60,7 +60,7 @@ export class Controller {
     return [true, null];
   }
 
-  public async handleWebsocketMessage(message: WebSocketRequest, ws: CustomWebSocket): Promise<FuncResponse<boolean>>{
+  public async handleWebsocketMessage(message: C2S_Message, ws: CustomWebSocket): Promise<FuncResponse<boolean>>{
     if(!ws.userId){
       return [null, new Error("userId is missing")];
     }

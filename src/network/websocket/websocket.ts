@@ -4,7 +4,7 @@ import { Controller } from '../../controller/controller'; // Import Controller
 import { IncomingMessage } from 'http'; // Import IncomingMessage
 import { verifyJwt } from '../../middleware/authMiddleware'; // Import verifyJwt
 import jwt from 'jsonwebtoken'; // Import jwt for error types
-import { WebSocketRequest, WebSocketResponse, CustomWebSocket } from '../../types';
+import { C2S_Message, S2C_Message, CustomWebSocket } from '../../types';
 
 
 
@@ -58,14 +58,14 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
     ws.on('message', async (message: string) => {
       console.log('Received message =>', message.toString());
       try {
-        const parsedMessage: WebSocketRequest = JSON.parse(message.toString());
+        const parsedMessage: C2S_Message = JSON.parse(message.toString());
         if (!parsedMessage.type || !parsedMessage.payload) {
           ws.send(JSON.stringify({ success: false, message: 'type or payload is missing' }))
         }
 
         const [_, error] = await controller.handleWebsocketMessage(parsedMessage, ws);
         if(error){
-          const responseMessage: WebSocketResponse = {
+          const responseMessage: S2C_Message = {
             type: 'RESPONSE',
             payload: { success: false, message: error.message}
           }
@@ -76,7 +76,7 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
         
       } catch (error) {
         console.error('Failed to parse WebSocket message or handle it:', error);
-        const responseMessage: WebSocketResponse = {
+        const responseMessage: S2C_Message = {
           type: 'RESPONSE',
           payload: { success: false, message: "Invalid message format."}
         }

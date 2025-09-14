@@ -1,6 +1,6 @@
 // New GameService class
 import { WebSocket } from 'ws';
-import { FuncResponse, GameRoom, PlayerState, User, WebSocketResponse, CustomWebSocket } from '../types';
+import { FuncResponse, GameRoom, PlayerState, User, S2C_Message, CustomWebSocket } from '../types';
 import { Repository } from '../repository/repository'; // For GameService
 
 // New GameService class
@@ -87,7 +87,7 @@ class GameManager {
       isReady: playerState.isReady,
     }));
 
-    const response: WebSocketResponse = {
+    const response: S2C_Message = {
       type: "LOBBY_STATE",
       payload: {
         players: playersPayload,
@@ -117,7 +117,7 @@ class GameManager {
       isReady: ps.isReady,
     }));
 
-    const response: WebSocketResponse = {
+    const response: S2C_Message = {
       type: "LOBBY_STATE",
       payload: {
         players: playersPayload,
@@ -191,7 +191,7 @@ class GameManager {
     }
   }
 
-  public broadcastToRoom(roomCode: string, message: WebSocketResponse): FuncResponse<boolean> {
+  public broadcastToRoom(roomCode: string, message: S2C_Message): FuncResponse<boolean> {
     const room = this.rooms.get(roomCode);
     if(!room){
       return [null, new Error("invalid roomCode")];
