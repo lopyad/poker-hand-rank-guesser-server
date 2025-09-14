@@ -4,13 +4,9 @@ import { Controller } from '../../controller/controller'; // Import Controller
 import { IncomingMessage } from 'http'; // Import IncomingMessage
 import { verifyJwt } from '../../middleware/authMiddleware'; // Import verifyJwt
 import jwt from 'jsonwebtoken'; // Import jwt for error types
+import { WebSocketRequest, WebSocketResponse, CustomWebSocket } from '../../types';
 
-// Extend WebSocket to store roomCode, playerId, and userId
-interface CustomWebSocket extends WebSocket {
-  roomCode?: string;
-  playerId?: string;
-  userId?: string; // Add userId
-}
+
 
 export function createWebSocketServer(httpServer: Server, controller: Controller) {
   const wss = new WebSocketServer({ server: httpServer });
@@ -38,10 +34,14 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
       return;
     }
 
+    
     try {
         if(token){
-        const decoded = verifyJwt(token);
-        ws.userId = decoded.userId; // Attach authenticated userId to WebSocket object
+        const [decoded, error] = verifyJwt(token);
+        if(error){
+          throw error;
+        }
+        ws.userId = decoded.userId;
         console.log(`Client ${ws.userId} authenticated.`);
 
         ws.send(JSON.stringify({ success: true, message: `Welcome, ${ws.userId}!` }));
@@ -49,52 +49,38 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
     } catch (error) {
       console.error('JWT verification failed:', error);
       let errorMessage = 'Authentication failed.';
-      if (error instanceof jwt.TokenExpiredError) {
-        errorMessage = 'Authentication failed: Token expired.';
-      } else if (error instanceof jwt.JsonWebTokenError) {
-        errorMessage = 'Authentication failed: Invalid token.';
-      }
+      
       ws.send(JSON.stringify({ success: false, message: errorMessage }));
       ws.close(1008, 'Unauthorized');
       return;
     }
 
-    ws.on('message', (message: string) => {
+    ws.on('message', async (message: string) => {
       console.log('Received message =>', message.toString());
       try {
-        const parsedMessage = JSON.parse(message.toString());
-
-        if (parsedMessage.type === 'joinRoom') {
-          const { roomCode } = parsedMessage;
-          const playerId = ws.userId;
-          if (!roomCode || !playerId) {
-            ws.send(JSON.stringify({ success: false, message: 'roomCode and playerId are required for joinRoom.' }));
-            return;
-          }
-
-          // Check if player is whitelisted before allowing join
-          const room = controller.getGameRoom(roomCode);
-          if (!room || !room.whitelistedPlayers.has(playerId)) {
-            ws.send(JSON.stringify({ success: false, message: 'Room not found or player not whitelisted.' }));
-            return;
-          }
-
-          const joined = controller.joinGameRoom(roomCode, playerId, ws);
-          if (joined) {
-            ws.roomCode = roomCode; // Store roomCode on WebSocket object
-            ws.playerId = playerId; // Store playerId on WebSocket object
-            ws.send(JSON.stringify({ success: true, message: `Joined room ${roomCode}.` }));
-            // Broadcast to room that player has joined (GameManager already does this)
-          } else {
-            ws.send(JSON.stringify({ success: false, message: `Failed to join room ${roomCode}.` }));
-          }
-        } else {
-          // Handle other message types or broadcast
-          broadcast(`Someone said: ${message.toString()}`);
+        const parsedMessage: WebSocketRequest = JSON.parse(message.toString());
+        if (!parsedMessage.type || !parsedMessage.payload) {
+          ws.send(JSON.stringify({ success: false, message: 'type or payload is missing' }))
         }
+
+        const [_, error] = await controller.handleWebsocketMessage(parsedMessage, ws);
+        if(error){
+          const responseMessage: WebSocketResponse = {
+            type: 'RESPONSE',
+            payload: { success: false, message: error.message}
+          }
+          ws.send(JSON.stringify(responseMessage));
+        }
+
+        // ws.send(JSON.stringify(result));
+        
       } catch (error) {
         console.error('Failed to parse WebSocket message or handle it:', error);
-        ws.send(JSON.stringify({ success: false, message: 'Invalid message format.' }));
+        const responseMessage: WebSocketResponse = {
+          type: 'RESPONSE',
+          payload: { success: false, message: "Invalid message format."}
+        }
+        ws.send(JSON.stringify(responseMessage));
       }
     });
 

@@ -1,16 +1,28 @@
 // src/middleware/authMiddleware.ts
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { ApiResponse, DecodedToken } from '../types';
+import { ApiResponse, DecodedToken, FuncResponse } from '../types';
 
 // Core JWT verification logic
-export const verifyJwt = (token: string): DecodedToken => {
+export const verifyJwt = (token: string): FuncResponse<DecodedToken> => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     console.error('JWT_SECRET is not defined in environment variables.');
-    throw new Error('Server configuration error: JWT secret missing.');
+    return [null, new Error('Server configuration error: JWT secret missing.')];
   }
-  return jwt.verify(token, secret) as DecodedToken;
+
+  try{
+    const result = jwt.verify(token, secret) as DecodedToken;
+    return [result, null];
+  } catch (e){
+    let errorMessage = 'Authentication failed.';
+    if (e instanceof jwt.TokenExpiredError) {
+      errorMessage = 'Authentication failed: Token expired.';
+    } else if (e instanceof jwt.JsonWebTokenError) {
+      errorMessage = 'Authentication failed: Invalid token.';
+    }
+    return [null, new Error(errorMessage)];
+  }
 };
 
 export const verifyToken = (req: Request, res: Response, next: NextFunction) => {
@@ -26,9 +38,10 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
 
   try {
     // 3. 코어 검증 로직 사용
-    const decoded = verifyJwt(token);
-
-    // 4. 추출된 정보를 req.user에 할당하여 다음 미들웨어/라우터에서 사용 가능하게 함
+    const [decoded, error] = verifyJwt(token);
+    if(error){
+      throw error;
+    }
     req.user = decoded;
 
     // 5. 다음 미들웨어 또는 라우터 핸들러로 제어 전달

@@ -1,86 +1,49 @@
 // New GameService class
 import { WebSocket } from 'ws';
-import { Failable, GameRoom, User } from '../types';
+import { FuncResponse, GameRoom, PlayerState, User, WebSocketResponse, CustomWebSocket } from '../types';
 import { Repository } from '../repository/repository'; // For GameService
 
 // New GameService class
 export class GameService {
-  private readonly gameManager: GameManager
+  readonly gameManager: GameManager
   constructor(
     private readonly repository: Repository
   ) {
-    this.gameManager = new GameManager();
-    console.log('GameService initialized with Repository and GameManager.');
+    this.gameManager = new GameManager(this.repository);
   }
 
-  async getUserById(id: string): Promise<Failable<User>> {
+  async getUserById(id: string): Promise<FuncResponse<User>> {
       console.log(`[GameService] Getting user by ID: ${id}`);
       return this.repository.getUserById(id);
   }
-
-  public createRoomForPlayer(playerId: string): string {
-    console.log(`[GameService] Player ${playerId} is creating a room.`);
-    const roomCode = this.gameManager.createRoom();
-    // At this point, the room is created. The player will join via WebSocket later.
-    return roomCode;
-  }
-
-  public getRoom(roomCode: string): GameRoom | undefined {
-    return this.gameManager.getRoom(roomCode);
-  }
-
-  public addPlayerToRoomWhitelist(roomCode: string, playerId: string): Failable<boolean> {
-    return this.gameManager.addPlayerToWhitelist(roomCode, playerId);
-  }
-
-  public checkAndWhitelistPlayer(roomCode: string, playerId: string): Failable<boolean> {
-    const room = this.gameManager.getRoom(roomCode);
-    if (!room) {
-      console.log(`[GameService] Room ${roomCode} not found for checkAndWhitelistPlayer.`);
-      return [null, new Error("fail to find room by roomCode")];
-    }
-    
-    const [_, error] = this.gameManager.addPlayerToWhitelist(roomCode, playerId);
-    if(error){
-      return [null, error];
-    }
-
-    return [true, null];
-    
-  }
-
-  public joinRoom(roomCode: string, playerId: string, ws: WebSocket): boolean {
-    return this.gameManager.joinRoom(roomCode, playerId, ws);
-  }
-
-  public leaveRoom(roomCode: string, playerId: string): void {
-    this.gameManager.leaveRoom(roomCode, playerId);
-  }
 }
 
-// Original GameManager, now purely for game logic
-class GameManager { // Removed export
+class GameManager {
   private rooms: Map<string, GameRoom> = new Map();
+  private countdowns: Map<string, NodeJS.Timeout> = new Map();
   private nextRoomId: number = 1;
+  private repository: Repository;
 
-  constructor() { // No repository here
-    console.log('GameManager initialized.');
+  constructor(repository: Repository) {
+    this.repository = repository;
   }
 
-  public createRoom(): string {
+  public createRoom(): FuncResponse<string> {
     const roomCode = this.generateUniqueRoomCode();
     const newRoom: GameRoom = {
       roomCode: roomCode,
-      players: new Map<string, WebSocket>(),
+      players: new Map<string, PlayerState>(),
       whitelistedPlayers: new Set<string>(), // Initialize whitelist
       maxPlayers: 4, // Set max players
+      state: 'lobby',
     };
     this.rooms.set(roomCode, newRoom);
     console.log(`Room ${roomCode} created.`);
-    return roomCode;
+
+    return [roomCode, null];
   }
 
-  public addPlayerToWhitelist(roomCode: string, playerId: string): Failable<boolean> {
+  public addPlayerToWhitelist(roomCode: string, playerId: string): FuncResponse<boolean> {
     const room = this.rooms.get(roomCode);
     if (room) {
       if (room.whitelistedPlayers.size < room.maxPlayers) {
@@ -96,16 +59,111 @@ class GameManager { // Removed export
     return [null, new Error("Room ${roomCode} not found.")];
   }
 
-  public joinRoom(roomCode: string, playerId: string, ws: WebSocket): boolean {
+  public async joinRoom(roomCode: string, playerId: string, ws: CustomWebSocket): Promise<FuncResponse<boolean>> {
     const room = this.rooms.get(roomCode);
-    if (room) {
-      room.players.set(playerId, ws);
-      console.log(`Player ${playerId} joined room ${roomCode}.`);
-      this.broadcastToRoom(roomCode, `Player ${playerId} has joined the room.`);
-      return true;
+    if(!room){
+      return [null, new Error("invalid roomCode")];
     }
-    console.log(`Room ${roomCode} not found for player ${playerId}.`);
-    return false;
+    if(!room.whitelistedPlayers.has(playerId)) {
+      return [null, new Error("player isn't in whitelist")];
+    }
+
+    // Cancel countdown if a new player joins
+    this._handleGameStartCondition(roomCode, true);
+
+    const [user, error] = await this.repository.getUserById(playerId);
+    if(error || !user){
+      return [null, new Error("fail to find user")];
+    }
+
+    ws.roomCode = roomCode;
+    ws.playerId = playerId;
+
+    room.players.set(playerId, { ws, isReady: false, name: user.name });
+    console.log(`Player ${playerId} joined room ${roomCode}.`);
+
+    const playersPayload = Array.from(room.players.values()).map(playerState => ({
+      name: playerState.name,
+      isReady: playerState.isReady,
+    }));
+
+    const response: WebSocketResponse = {
+      type: "LOBBY_STATE",
+      payload: {
+        players: playersPayload,
+      }
+    };
+
+    this.broadcastToRoom(roomCode, response);
+    return [true, null];
+  }
+
+  public async setPlayerReady(playerId: string, roomCode: string, isReady: boolean): Promise<FuncResponse<boolean>> {
+    const room = this.rooms.get(roomCode);
+    if (!room) {
+      return [null, new Error("Room not found.")];
+    }
+
+    const playerState = room.players.get(playerId);
+    if (!playerState) {
+      return [null, new Error("Player not found in this room.")];
+    }
+
+    playerState.isReady = isReady;
+    console.log(`Player ${playerId} in room ${roomCode} is now ${isReady ? 'ready' : 'not ready'}.`);
+
+    const playersPayload = Array.from(room.players.values()).map(ps => ({
+      name: ps.name,
+      isReady: ps.isReady,
+    }));
+
+    const response: WebSocketResponse = {
+      type: "LOBBY_STATE",
+      payload: {
+        players: playersPayload,
+      },
+    };
+
+    this.broadcastToRoom(roomCode, response);
+
+    // Check game start condition
+    this._handleGameStartCondition(roomCode);
+
+    return [true, null];
+  }
+
+  private _handleGameStartCondition(roomCode: string, forceCancel: boolean = false) {
+    const room = this.rooms.get(roomCode);
+    if (!room) return;
+
+    const allPlayersReady = room.players.size > 0 && Array.from(room.players.values()).every(p => p.isReady);
+
+    if ((!allPlayersReady || forceCancel) && room.state === 'countdown') {
+      // Cancel countdown
+      const timer = this.countdowns.get(roomCode);
+      if (timer) {
+        clearTimeout(timer);
+        this.countdowns.delete(roomCode);
+        room.state = 'lobby';
+        this.broadcastToRoom(roomCode, { type: 'GAME_START_CANCELLED', payload: {} });
+        console.log(`Countdown cancelled for room ${roomCode}.`);
+      }
+    } else if (allPlayersReady && room.state === 'lobby') {
+      // Start countdown
+      room.state = 'countdown';
+      const countdownDuration = 5; // 5 seconds
+      this.broadcastToRoom(roomCode, { type: 'GAME_START_COUNTDOWN', payload: { duration: countdownDuration } });
+      console.log(`Countdown started for room ${roomCode}.`);
+
+      const timer = setTimeout(() => {
+        room.state = 'in-game';
+        this.broadcastToRoom(roomCode, { type: 'GAME_STARTED', payload: {} });
+        console.log(`Game started in room ${roomCode}.`);
+        this.countdowns.delete(roomCode);
+      }, countdownDuration * 1000);
+
+      this.countdowns.set(roomCode, timer);
+    }
   }
 
   public leaveRoom(roomCode: string, playerId: string): void {
@@ -113,23 +171,38 @@ class GameManager { // Removed export
     if (room) {
       room.players.delete(playerId);
       console.log(`Player ${playerId} left room ${roomCode}.`);
-      this.broadcastToRoom(roomCode, `Player ${playerId} has left the room.`);
+
       if (room.players.size === 0) {
+        const timer = this.countdowns.get(roomCode);
+        if (timer) {
+            clearTimeout(timer);
+            this.countdowns.delete(roomCode);
+        }
         this.rooms.delete(roomCode);
         console.log(`Room ${roomCode} is empty and has been removed.`);
+      } else {
+        this._handleGameStartCondition(roomCode, true); // Force cancel countdown
+        const playersPayload = Array.from(room.players.values()).map(ps => ({
+            name: ps.name,
+            isReady: ps.isReady,
+        }));
+        this.broadcastToRoom(roomCode, { type: "LOBBY_STATE", payload: { players: playersPayload } });
       }
     }
   }
 
-  public broadcastToRoom(roomCode: string, message: string): void {
+  public broadcastToRoom(roomCode: string, message: WebSocketResponse): FuncResponse<boolean> {
     const room = this.rooms.get(roomCode);
-    if (room) {
-      room.players.forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(message);
-        }
-      });
+    if(!room){
+      return [null, new Error("invalid roomCode")];
     }
+
+    room.players.forEach(playerState => {
+      if (playerState.ws.readyState === WebSocket.OPEN) {
+        playerState.ws.send(JSON.stringify(message));
+      }
+    });
+    return [true, null];
   }
 
   private generateUniqueRoomCode(): string {

@@ -13,7 +13,7 @@ export function createGameRouter(controller: Controller): Router {
     }
 
     const userId = req.user.userId as string;
-    const roomCode = controller.createGameRoom(userId);
+    const [roomCode, error] = controller.createGameRoom(userId);
 
     res.status(200).json({
         success: true,

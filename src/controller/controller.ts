@@ -1,10 +1,11 @@
 import { AuthService } from "../service/auth.service";
 import { Service } from "../service/service";
 import { GameService } from "../service/game.service"; // Changed import
-import { GameRoom } from "../types"; // Import GameRoom
+import { CustomWebSocket, FuncResponse, GameRoom, WebSocketRequest, WebSocketResponse } from "../types"; // Import GameRoom
 import { WebSocket } from 'ws'; // Import WebSocket
 
-import { ApiResponse, Failable, User } from "../types"; // Import Failable and User
+import { ApiResponse, User } from "../types"; // Import Failable and User
+import { BlobOptions } from "buffer";
 
 export class Controller {
   constructor(
@@ -17,7 +18,7 @@ export class Controller {
     console.log("Here is Controller");
   }
 
-  async handleGoogleLogin(idToken: string): Promise<Failable<string>> {
+  async handleGoogleLogin(idToken: string): Promise<FuncResponse<string>> {
     console.log("[Controller] Received ID token from client.");
     const [result, error] = await this.authService.processGoogleLogin(idToken);
 
@@ -35,29 +36,59 @@ export class Controller {
     return [result, null];
   }
 
-  async getUserProfile(userId: string): Promise<Failable<User>> {
+  async getUserProfile(userId: string): Promise<FuncResponse<User>> {
     console.log(`[Controller] Getting user profile for userId: ${userId}`);
     return this.generalService.getUserById(userId);
   }
 
-  public createGameRoom(playerId: string): string {
+  public createGameRoom(playerId: string): FuncResponse<string> {
     console.log(`[Controller] Creating a new game room for player ${playerId}.`);
-    return this.gameService.createRoomForPlayer(playerId);
+    const [roomCode, error] = this.gameService.gameManager.createRoom();
+    if(error){
+      return [null, error];
+    }
+
+    return [roomCode, null];
   }
 
-  public checkRoomJoinAndWhitelistPlayer(roomCode: string, playerId: string): Failable<boolean> {
-    return this.gameService.checkAndWhitelistPlayer(roomCode, playerId);
+  public checkRoomJoinAndWhitelistPlayer(roomCode: string, playerId: string): FuncResponse<boolean> {
+    const [_, error] = this.gameService.gameManager.addPlayerToWhitelist(roomCode, playerId);
+    if(error){
+      return [null, error];
+    }
+
+    return [true, null];
   }
 
-  public getGameRoom(roomCode: string): GameRoom | undefined {
-    return this.gameService.getRoom(roomCode);
-  }
+  public async handleWebsocketMessage(message: WebSocketRequest, ws: CustomWebSocket): Promise<FuncResponse<boolean>>{
+    if(!ws.userId){
+      return [null, new Error("userId is missing")];
+    }
 
-  public joinGameRoom(roomCode: string, playerId: string, ws: WebSocket): boolean {
-    return this.gameService.joinRoom(roomCode, playerId, ws);
+    switch(message.type){
+      case "JOIN_ROOM": {
+        const [_, error] = await this.gameService.gameManager.joinRoom(message.payload.roomCode, ws.userId, ws);
+        if(error){
+          return [null, error];
+        }
+        break;
+      }
+      case "PLAYER_READY": {
+        if (!ws.roomCode) {
+          return [null, new Error("Player is not in a room.")];
+        }
+        const [_, error] = await this.gameService.gameManager.setPlayerReady(ws.userId, ws.roomCode, message.payload.isReady);
+        if (error) {
+          return [null, error];
+        }
+        break;
+      }
+    }
+
+    return [true, null];
   }
 
   public leaveGameRoom(roomCode: string, playerId: string): void {
-    this.gameService.leaveRoom(roomCode, playerId);
+    this.gameService.gameManager.leaveRoom(roomCode, playerId);
   }
 }
