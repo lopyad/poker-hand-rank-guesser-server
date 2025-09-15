@@ -36,6 +36,7 @@ declare global {
 // User type definition
 import { ObjectId } from 'mongodb'; // Import ObjectId for User type
 import { WebSocket } from 'ws'; // New import for GameRoom
+import { Card, EvaluatedHand } from './core/types';
 
 export type User = {
   _id?: ObjectId; // MongoDB's _id 필드
@@ -45,13 +46,21 @@ export type User = {
   googleId: string;
 };
 
+export interface PlayerGameData {
+    holeCards: Card[];
+    evaluatedHand?: EvaluatedHand;
+    guess: number; // Changed to required, 0 means no guess
+    score: number;
+}
+
 export type PlayerState = {
   ws: WebSocket;
   isReady: boolean;
   name: string;
+  gameData: PlayerGameData;
 };
 
-export type GameRoomState = 'lobby' | 'countdown' | 'in-game';
+export type GameRoomState = 'lobby' | 'countdown' | 'in-game' | 'guessing' | 'results' | 'round_intermission' | 'waiting-for-next-round-ready';
 
 export interface GameRoom {
   roomCode: string;
@@ -59,6 +68,15 @@ export interface GameRoom {
   whitelistedPlayers: Set<string>; // Players authorized to join
   maxPlayers: number; // Maximum number of players allowed
   state: GameRoomState;
+  deck: Card[];
+  communityCards: Card[];
+}
+
+export interface PlayerWithEvaluatedHandAndRank {
+  playerId: string;
+  playerState: PlayerState;
+  evaluatedHand: EvaluatedHand;
+  actualRank?: number;
 }
 
 
@@ -67,8 +85,8 @@ export type FuncResponse<T> = [T, null] | [null, Error];
 
 export interface CustomWebSocket extends WebSocket {
   roomCode?: string;
-  playerId?: string;
-  userId?: string;
+  // playerId?: string;
+  userId: string;
 }
 
 // C2S: Client to Server Message Types
@@ -86,9 +104,23 @@ export interface C2S_PlayerReady {
   };
 }
 
+export interface C2S_SubmitGuess {
+  type: 'SUBMIT_GUESS';
+  payload: {
+    guess: number; // 1, 2, 3, 4
+  };
+}
+
+export interface C2S_NextRoundReady {
+  type: 'NEXT_ROUND_READY';
+  payload: {};
+}
+
 export type C2S_Message =
   | C2S_JoinRoom
-  | C2S_PlayerReady;
+  | C2S_PlayerReady
+  | C2S_SubmitGuess
+  | C2S_NextRoundReady;
 
 // S2C: Server to Client Message Types
 export interface S2C_Response {
@@ -111,7 +143,11 @@ export interface S2C_LobbyState {
 
 export interface S2C_RoundStart {
   type: 'ROUND_START';
-  payload: {};
+  payload: {
+    holeCards: Card[];
+    communityCards: Card[];
+    playerName: string; // Added player name
+  };
 }
 
 export interface S2C_ShowResults {
@@ -136,6 +172,22 @@ export interface S2C_GameStartCancelled {
   payload: {};
 }
 
+export interface S2C_RoundResult {
+    type: 'ROUND_RESULT';
+    payload: {
+        results: {
+            playerId: string;
+            name: string;
+            holeCards: Card[];
+            evaluatedHand: EvaluatedHand;
+            guess: number;
+            actualRank: number;
+            isCorrect: boolean;
+            score: number;
+        }[];
+    };
+}
+
 export type S2C_Message =
   | S2C_Response
   | S2C_LobbyState
@@ -143,4 +195,5 @@ export type S2C_Message =
   | S2C_ShowResults
   | S2C_GameStartCountdown
   | S2C_GameStarted
-  | S2C_GameStartCancelled;
+  | S2C_GameStartCancelled
+  | S2C_RoundResult;

@@ -67,7 +67,7 @@ export class Controller {
 
     switch(message.type){
       case "JOIN_ROOM": {
-        const [_, error] = await this.gameService.gameManager.joinRoom(message.payload.roomCode, ws.userId, ws);
+        const [_, error] = await this.gameService.gameManager.joinRoom(message.payload.roomCode, ws);
         if(error){
           return [null, error];
         }
@@ -78,6 +78,26 @@ export class Controller {
           return [null, new Error("Player is not in a room.")];
         }
         const [_, error] = await this.gameService.gameManager.setPlayerReady(ws.userId, ws.roomCode, message.payload.isReady);
+        if (error) {
+          return [null, error];
+        }
+        break;
+      }
+      case "SUBMIT_GUESS": {
+        if (!ws.roomCode) {
+          return [null, new Error("Player is not in a room.")];
+        }
+        const [_, error] = await this.gameService.gameManager.submitGuess(ws.userId, ws.roomCode, message.payload.guess);
+        if (error) {
+          return [null, error];
+        }
+        break;
+      }
+      case "NEXT_ROUND_READY": {
+        if (!ws.roomCode) {
+          return [null, new Error("Player is not in a room.")];
+        }
+        const [_, error] = await this.gameService.gameManager.setPlayerNextRoundReady(ws.userId, ws.roomCode);
         if (error) {
           return [null, error];
         }

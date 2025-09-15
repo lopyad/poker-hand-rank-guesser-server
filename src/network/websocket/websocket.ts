@@ -36,7 +36,7 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
 
     
     try {
-        if(token){
+      //if(token){
         const [decoded, error] = verifyJwt(token);
         if(error){
           throw error;
@@ -45,7 +45,7 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
         console.log(`Client ${ws.userId} authenticated.`);
 
         ws.send(JSON.stringify({ success: true, message: `Welcome, ${ws.userId}!` }));
-      }
+      //}
     } catch (error) {
       console.error('JWT verification failed:', error);
       let errorMessage = 'Authentication failed.';
@@ -87,8 +87,8 @@ export function createWebSocketServer(httpServer: Server, controller: Controller
     ws.on('close', () => {
       console.log('Client disconnected');
       // If the disconnected client was in a room, remove them
-      if (ws.roomCode && ws.playerId) {
-        controller.leaveGameRoom(ws.roomCode, ws.playerId);
+      if (ws.roomCode) {
+        controller.leaveGameRoom(ws.roomCode, ws.userId);
       }
     });
 
