@@ -252,7 +252,7 @@ class GameManager {
 
     // 3. Deal hole cards and evaluate hands for each player
     room.players.forEach(player => {
-      player.gameData.holeCards = dealCards(room.deck, 4);
+      player.gameData.holeCards = dealCards(room.deck, 2);
       player.gameData.evaluatedHand = evaluatePlayerHand(player.gameData.holeCards, room.communityCards);
 
       // Send private hole cards and community cards to each player
